@@ -436,6 +436,26 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		return -1, err
 	}
 
+	// Apply an additional age filter to preserve the previous behaviour when ago is provided.
+	if deleteBefore != nil {
+		filteredManifests := make([]acr.ManifestAttributesBase, 0, len(manifestsToDelete))
+		for _, manifest := range manifestsToDelete {
+			if manifest.LastUpdateTime == nil {
+				continue
+			}
+
+			lastUpdateTime, err := time.Parse(time.RFC3339Nano, *manifest.LastUpdateTime)
+			if err != nil {
+				return -1, err
+			}
+
+			if lastUpdateTime.Before(*deleteBefore) {
+				filteredManifests = append(filteredManifests, manifest)
+			}
+		}
+		manifestsToDelete = filteredManifests
+	}
+
 	// Apply keep logic if keep parameter is provided
 	if keep > 0 && len(manifestsToDelete) > keep {
 		// Sort manifests by LastUpdateTime (newest first)

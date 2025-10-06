@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/mocks"
@@ -503,6 +504,9 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &[]bool{true}[0], WriteEnabled: &[]bool{true}[0]},
 		}
 	}
+	formatRelativeTimestamp := func(offset time.Duration) string {
+		return time.Now().UTC().Add(offset).Format(time.RFC3339Nano)
+	}
 
 	// Test 1: Age filtering - only delete old manifests
 	t.Run("AgeFilteringDeletesOnlyOldManifests", func(t *testing.T) {
@@ -510,8 +514,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 
 		// Create manifests with different timestamps
-		oldManifest := createManifestWithTime("sha256:old123", "2023-01-01T00:00:00Z")
-		recentManifest := createManifestWithTime("sha256:recent123", "2024-12-01T00:00:00Z")
+		oldManifest := createManifestWithTime("sha256:old123", formatRelativeTimestamp(-400*24*time.Hour))
+		recentManifest := createManifestWithTime("sha256:recent123", formatRelativeTimestamp(-100*24*time.Hour))
 
 		manifestsResult := &acr.Manifests{
 			Response: autorest.Response{
@@ -549,11 +553,11 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 
 		// Create 5 manifests with different timestamps
 		manifests := []acr.ManifestAttributesBase{
-			createManifestWithTime("sha256:oldest", "2023-01-01T00:00:00Z"),
-			createManifestWithTime("sha256:old", "2023-06-01T00:00:00Z"),
-			createManifestWithTime("sha256:medium", "2023-12-01T00:00:00Z"),
-			createManifestWithTime("sha256:recent", "2024-06-01T00:00:00Z"),
-			createManifestWithTime("sha256:newest", "2024-12-01T00:00:00Z"),
+			createManifestWithTime("sha256:oldest", formatRelativeTimestamp(-700*24*time.Hour)),
+			createManifestWithTime("sha256:old", formatRelativeTimestamp(-500*24*time.Hour)),
+			createManifestWithTime("sha256:medium", formatRelativeTimestamp(-350*24*time.Hour)),
+			createManifestWithTime("sha256:recent", formatRelativeTimestamp(-200*24*time.Hour)),
+			createManifestWithTime("sha256:newest", formatRelativeTimestamp(-50*24*time.Hour)),
 		}
 
 		manifestsResult := &acr.Manifests{
@@ -594,11 +598,11 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 
 		// Create manifests where some are old enough and some are not
 		manifests := []acr.ManifestAttributesBase{
-			createManifestWithTime("sha256:veryold1", "2023-01-01T00:00:00Z"),
-			createManifestWithTime("sha256:veryold2", "2023-02-01T00:00:00Z"),
-			createManifestWithTime("sha256:veryold3", "2023-03-01T00:00:00Z"),
-			createManifestWithTime("sha256:recent1", "2024-12-01T00:00:00Z"), // Too recent
-			createManifestWithTime("sha256:recent2", "2024-12-15T00:00:00Z"), // Too recent
+			createManifestWithTime("sha256:veryold1", formatRelativeTimestamp(-650*24*time.Hour)),
+			createManifestWithTime("sha256:veryold2", formatRelativeTimestamp(-550*24*time.Hour)),
+			createManifestWithTime("sha256:veryold3", formatRelativeTimestamp(-450*24*time.Hour)),
+			createManifestWithTime("sha256:recent1", formatRelativeTimestamp(-150*24*time.Hour)),
+			createManifestWithTime("sha256:recent2", formatRelativeTimestamp(-90*24*time.Hour)),
 		}
 
 		manifestsResult := &acr.Manifests{
@@ -636,8 +640,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 
-		oldManifest := createManifestWithTime("sha256:old123", "2023-01-01T00:00:00Z")
-		recentManifest := createManifestWithTime("sha256:recent123", "2024-12-01T00:00:00Z")
+		oldManifest := createManifestWithTime("sha256:old123", formatRelativeTimestamp(-400*24*time.Hour))
+		recentManifest := createManifestWithTime("sha256:recent123", formatRelativeTimestamp(-100*24*time.Hour))
 
 		manifestsResult := &acr.Manifests{
 			Response: autorest.Response{
