@@ -19,14 +19,20 @@ env:
 
 jobs:
   build-and-push:
-    name: Build and Publish
-    runs-on: ubuntu-latest
+    name: Build and Publish (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runs-on: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -65,13 +71,69 @@ jobs:
             type=ref,event=pr
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
+          flavor: |
+            suffix=-${{ matrix.arch }},onlatest=true
 
-      - name: Build and push image
+      - name: Build and push image (${{ matrix.platform }})
         uses: docker/build-push-action@v6
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  publish-manifest:
+    name: Publish multi-arch manifest
+    needs: build-and-push
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to GitHub Container Registry
+        env:
+          GHCR_REGISTRY: ${{ env.REGISTRY }}
+          GHCR_USERNAME: ${{ github.repository_owner }}
+          GHCR_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ATTEMPTS=5
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            echo "Attempt ${attempt}/${ATTEMPTS} to log in to ${GHCR_REGISTRY} as ${GHCR_USERNAME}" >&2
+            if echo "${GHCR_PASSWORD}" | docker login "${GHCR_REGISTRY}" -u "${GHCR_USERNAME}" --password-stdin; then
+              exit 0
+            fi
+
+            if [ "${attempt}" -lt "${ATTEMPTS}" ]; then
+              SLEEP_DURATION=$((attempt * 5))
+              echo "Login failed, retrying in ${SLEEP_DURATION}s..." >&2
+              sleep "${SLEEP_DURATION}"
+            fi
+          done
+
+          echo "Docker login to ${GHCR_REGISTRY} failed after ${ATTEMPTS} attempts" >&2
+          exit 1
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Publish manifest list
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          for tag in ${TAGS}; do
+            echo "Publishing manifest for ${tag}" >&2
+            docker buildx imagetools create \
+              --tag "${tag}" \
+              "${tag}-amd64" \
+              "${tag}-arm64"
+          done
