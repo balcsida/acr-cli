@@ -312,6 +312,53 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.AssertExpectations(t)
 	})
 
+	t.Run("SkipsManifestsNewerThanAgo", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		manifestList := &acr.Manifests{
+			Registry:  &testLoginURL,
+			ImageName: &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+				LastUpdateTime:       &lastUpdateTime,
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+				Digest:               &digest1,
+				MediaType:            &dockerV2MediaType,
+				Tags:                 nil,
+			}},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestList, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest1).Return(EmptyListManifestsResult, nil).Once()
+
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "1h", 0, nil, false, false)
+		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
+		assert.NoError(err)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("DeletesManifestsOlderThanAgo", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		manifestList := &acr.Manifests{
+			Registry:  &testLoginURL,
+			ImageName: &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+				LastUpdateTime:       &lastUpdateTime2DaysAgo,
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+				Digest:               &digest2,
+				MediaType:            &dockerV2MediaType,
+				Tags:                 nil,
+			}},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestList, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest2).Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest2).Return(nil, nil).Once()
+
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "24h", 0, nil, false, false)
+		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
+		assert.NoError(err)
+		mockClient.AssertExpectations(t)
+	})
+
 	// If there is an error (different to a 404 error) getting the second set of manifests an error should be returned.
 	t.Run("GetAcrManifestsErrorTest", func(t *testing.T) {
 		assert := assert.New(t)

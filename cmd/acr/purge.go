@@ -418,35 +418,22 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	} else {
 		fmt.Printf("Deleting manifests for repository: %s\n", repoName)
 	}
-	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
-	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
-	// then it should not be deleted.
-	manifestsToDelete, err := repository.GetUntaggedManifests(ctx, repoParallelism, acrClient, repoName, false, manifestToTagsCountMap, dryRun, includeLocked)
-	if err != nil {
-		return -1, err
-	}
 
-	// Filter by age if ago parameter is provided
+	var deleteBefore *time.Time
 	if ago != "" {
 		agoDuration, err := parseDuration(ago)
 		if err != nil {
 			return -1, err
 		}
 		timeToCompare := time.Now().UTC().Add(agoDuration)
-
-		filteredManifests := []acr.ManifestAttributesBase{}
-		for _, manifest := range manifestsToDelete {
-			if manifest.LastUpdateTime != nil {
-				lastUpdateTime, err := time.Parse(time.RFC3339Nano, *manifest.LastUpdateTime)
-				if err != nil {
-					return -1, err
-				}
-				if lastUpdateTime.Before(timeToCompare) {
-					filteredManifests = append(filteredManifests, manifest)
-				}
-			}
-		}
-		manifestsToDelete = filteredManifests
+		deleteBefore = &timeToCompare
+	}
+	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
+	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
+	// then it should not be deleted.
+	manifestsToDelete, err := repository.GetUntaggedManifests(ctx, repoParallelism, acrClient, repoName, false, manifestToTagsCountMap, dryRun, includeLocked, deleteBefore)
+	if err != nil {
+		return -1, err
 	}
 
 	// Apply keep logic if keep parameter is provided
