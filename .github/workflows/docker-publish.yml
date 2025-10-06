@@ -8,6 +8,11 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/acr-cli
@@ -16,10 +21,6 @@ jobs:
   build-and-push:
     name: Build and Publish
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,11 +32,27 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GHCR_REGISTRY: ${{ env.REGISTRY }}
+          GHCR_USERNAME: ${{ github.repository_owner }}
+          GHCR_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ATTEMPTS=5
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            echo "Attempt ${attempt}/${ATTEMPTS} to log in to ${GHCR_REGISTRY} as ${GHCR_USERNAME}" >&2
+            if echo "${GHCR_PASSWORD}" | docker login "${GHCR_REGISTRY}" -u "${GHCR_USERNAME}" --password-stdin; then
+              exit 0
+            fi
+
+            if [ "${attempt}" -lt "${ATTEMPTS}" ]; then
+              SLEEP_DURATION=$((attempt * 5))
+              echo "Login failed, retrying in ${SLEEP_DURATION}s..." >&2
+              sleep "${SLEEP_DURATION}"
+            fi
+          done
+
+          echo "Docker login to ${GHCR_REGISTRY} failed after ${ATTEMPTS} attempts" >&2
+          exit 1
 
       - name: Extract Docker metadata
         id: meta
