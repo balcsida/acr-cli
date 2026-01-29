@@ -510,8 +510,9 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 
 		// Create manifests with different timestamps
+		// old manifest is more than 300 days ago, recent is within 300 days
 		oldManifest := createManifestWithTime("sha256:old123", "2023-01-01T00:00:00Z")
-		recentManifest := createManifestWithTime("sha256:recent123", "2024-12-01T00:00:00Z")
+		recentManifest := createManifestWithTime("sha256:recent123", "2025-12-01T00:00:00Z")
 
 		manifestsResult := &acr.Manifests{
 			Response: autorest.Response{
@@ -552,8 +553,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 			createManifestWithTime("sha256:oldest", "2023-01-01T00:00:00Z"),
 			createManifestWithTime("sha256:old", "2023-06-01T00:00:00Z"),
 			createManifestWithTime("sha256:medium", "2023-12-01T00:00:00Z"),
-			createManifestWithTime("sha256:recent", "2024-06-01T00:00:00Z"),
-			createManifestWithTime("sha256:newest", "2024-12-01T00:00:00Z"),
+			createManifestWithTime("sha256:recent", "2025-06-01T00:00:00Z"),
+			createManifestWithTime("sha256:newest", "2025-12-01T00:00:00Z"),
 		}
 
 		manifestsResult := &acr.Manifests{
@@ -593,12 +594,13 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 
 		// Create manifests where some are old enough and some are not
+		// With 300d ago filter from 2026-01-29, cutoff is around 2025-04-04
 		manifests := []acr.ManifestAttributesBase{
 			createManifestWithTime("sha256:veryold1", "2023-01-01T00:00:00Z"),
 			createManifestWithTime("sha256:veryold2", "2023-02-01T00:00:00Z"),
 			createManifestWithTime("sha256:veryold3", "2023-03-01T00:00:00Z"),
-			createManifestWithTime("sha256:recent1", "2024-12-01T00:00:00Z"), // Too recent
-			createManifestWithTime("sha256:recent2", "2024-12-15T00:00:00Z"), // Too recent
+			createManifestWithTime("sha256:recent1", "2025-12-01T00:00:00Z"), // Too recent (within 300 days)
+			createManifestWithTime("sha256:recent2", "2025-12-15T00:00:00Z"), // Too recent (within 300 days)
 		}
 
 		manifestsResult := &acr.Manifests{
@@ -636,8 +638,9 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 
+		// old manifest is more than 300 days ago, recent is within 300 days
 		oldManifest := createManifestWithTime("sha256:old123", "2023-01-01T00:00:00Z")
-		recentManifest := createManifestWithTime("sha256:recent123", "2024-12-01T00:00:00Z")
+		recentManifest := createManifestWithTime("sha256:recent123", "2025-12-01T00:00:00Z")
 
 		manifestsResult := &acr.Manifests{
 			Response: autorest.Response{
